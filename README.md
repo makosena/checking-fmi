@@ -1,3 +1,5 @@
+
+
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
@@ -105,7 +107,7 @@
     </div>
 
     <script>
-        document.getElementById('fmiCheckForm').addEventListener('submit', function(event) {
+        document.getElementById('fmiCheckForm').addEventListener('submit', async function(event) {
             event.preventDefault(); // Empêche le rechargement de la page
             const imeiSerial = document.getElementById('imeiSerial').value.trim();
             const resultDiv = document.getElementById('result');
@@ -114,44 +116,118 @@
             resultDiv.className = '';
             resultDiv.innerHTML = '<p class="result-info">Vérification en cours...</p>';
 
-            // Ici, vous intégreriez la logique de vérification réelle.
-            // Pour cet exemple, nous allons simuler une réponse.
-            setTimeout(() => {
-                let checkStatus = "";
-                let resultMessage = "";
+            // ATTENTION : Cette requête directe va très probablement ÉCHOUER en raison de la politique CORS (Cross-Origin Resource Sharing) des navigateurs.
+            // Les navigateurs empêchent le code JavaScript d'une page (votre HTML local) de faire des requêtes directes à un autre domaine (iunlocker.com)
+            // à moins que le serveur cible n'ait explicitement autorisé ces requêtes.
+            // Pour une intégration "réelle", vous auriez besoin d'un serveur intermédiaire (backend) qui ferait la requête à iunlocker.com
+            // et renverrait le résultat à votre page HTML.
 
-                // Simulation basée sur une partie de l'IMEI/Numéro de Série
-                if (imeiSerial.startsWith('123')) {
-                    checkStatus = "locked";
-                } else if (imeiSerial.startsWith('456')) {
-                    checkStatus = "clean";
-                } else if (imeiSerial.startsWith('789')) {
-                    checkStatus = "unknown";
-                } else {
-                    checkStatus = "invalid";
+            try {
+                // Construction de l'URL avec le paramètre 'imei' ou 'serial'.
+                // L'API d'iunlocker.com n'est pas publique et ce n'est probablement pas le bon format de requête.
+                // Ce lien est celui d'une page web interactive, pas un endpoint d'API.
+                // Il se peut que le paramètre s'appelle 'imei', 'serial', ou autre chose, ou qu'il faille un POST request.
+                const url = `https://iunlocker.com/fr/check_icloud.php?imei=${imeiSerial}`; // Exemple : Supposons qu'il utilise le paramètre 'imei'
+
+                const response = await fetch(url, {
+                    method: 'GET', // ou 'POST' si l'API le requiert
+                    // mode: 'no-cors', // N'utilisez pas ceci en production, car cela rendrait la réponse opaque (impossible à lire)
+                    // headers: {
+                    //     'Content-Type': 'application/json', // ou 'application/x-www-form-urlencoded'
+                    //     // Ajoutez ici d'autres en-têtes si l'API iunlocker.com en requiert (ex: une clé API)
+                    // }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Erreur HTTP: ${response.status} - Probablement un problème de CORS ou le serveur a refusé la requête.`);
                 }
+
+                // Pour iunlocker.com, la réponse ne sera probablement pas du JSON direct ou du texte structuré,
+                // car c'est une page web complète. Vous devriez analyser le HTML si la requête réussit,
+                // ce qui est complexe et non recommandé depuis le client pour des sites tiers.
+                const data = await response.text(); // Lire la réponse en tant que texte (HTML)
+
+                // Ici, vous devriez analyser 'data' (qui serait le HTML de la page iunlocker.com)
+                // pour extraire le statut FMI. C'est très complexe et fragile.
+                // Par exemple, rechercher des mots clés comme "Activé", "Désactivé", "Clean", "Locked".
+                let checkStatus = "unknown";
+                let resultMessage = "Impossible d'analyser le résultat de iunlocker.com directement depuis le navigateur.";
+
+                if (data.includes("Activation Lock: ON")) { // Ceci est un exemple, le texte exact peut varier
+                    checkStatus = "locked";
+                    resultMessage = `<b>Statut FMI (via iunlocker.com) : Verrouillé</b><br>L'appareil est associé à un compte Apple ID.`;
+                } else if (data.includes("Activation Lock: OFF")) { // Ceci est un exemple
+                    checkStatus = "clean";
+                    resultMessage = `<b>Statut FMI (via iunlocker.com) : Désactivé (Propre)</b><br>L'appareil n'est pas associé à un compte Apple ID.`;
+                } else {
+                    resultMessage = `<b>Statut FMI (via iunlocker.com) : Indéterminé</b><br>Veuillez consulter la page iunlocker.com manuellement pour l'IMEI/Numéro de Série : <a href="${url}" target="_blank">${imeiSerial}</a><br>Réponse brute (limitée) : ${data.substring(0, 200)}...`; // Afficher une partie de la réponse
+                }
+
 
                 switch (checkStatus) {
                     case "locked":
                         resultDiv.classList.add('result-danger');
-                        resultMessage = "<b>Statut FMI : Verrouillé</b><br>L'appareil est associé à un compte Apple ID. L'activation FMI est active.";
                         break;
                     case "clean":
                         resultDiv.classList.add('result-success');
-                        resultMessage = "<b>Statut FMI : Désactivé (Propre)</b><br>L'appareil n'est pas associé à un compte Apple ID. L'activation FMI est inactive.";
                         break;
-                    case "unknown":
-                        resultDiv.classList.add('result-info');
-                        resultMessage = "<b>Statut FMI : Inconnu</b><br>Impossible de déterminer le statut d'activation FMI pour le moment. Veuillez réessayer.";
-                        break;
-                    case "invalid":
                     default:
                         resultDiv.classList.add('result-info');
-                        resultMessage = "<b>Erreur :</b> IMEI/Numéro de Série invalide ou non trouvé. Veuillez vérifier et réessayer.";
                         break;
                 }
                 resultDiv.innerHTML = `<p>${resultMessage}</p>`;
-            }, 2000); // Simule un délai de 2 secondes pour la vérification
+
+            } catch (error) {
+                console.error('Erreur lors de la vérification FMI:', error);
+                resultDiv.classList.add('result-danger');
+                resultDiv.innerHTML = `
+                    <p><b>Erreur de Vérification :</b> Impossible d'accéder au service de vérification.</p>
+                    <p>Ceci est très probablement dû à la <b>politique de sécurité CORS</b> de votre navigateur, qui bloque les requêtes directes vers des sites externes.</p>
+                    <p>Pour une intégration réelle, un <b>serveur intermédiaire (backend)</b> est nécessaire.</p>
+                    <p>Détail de l'erreur : ${error.message}</p>
+                    <p>Veuillez essayer la vérification manuellement sur <a href="https://iunlocker.com/fr/check_icloud.php" target="_blank">iunlocker.com</a>.</p>
+                `;
+
+                // --- Simulation de secours (décommentez pour utiliser la simulation si la requête réelle échoue) ---
+                /*
+                setTimeout(() => {
+                    let checkStatusSim = "";
+                    let resultMessageSim = "";
+
+                    if (imeiSerial.startsWith('123')) {
+                        checkStatusSim = "locked";
+                    } else if (imeiSerial.startsWith('456')) {
+                        checkStatusSim = "clean";
+                    } else if (imeiSerial.startsWith('789')) {
+                        checkStatusSim = "unknown";
+                    } else {
+                        checkStatusSim = "invalid";
+                    }
+
+                    switch (checkStatusSim) {
+                        case "locked":
+                            resultDiv.classList.add('result-danger');
+                            resultMessageSim = "<b>[Simulation] Statut FMI : Verrouillé</b><br>L'appareil est associé à un compte Apple ID. L'activation FMI est active.";
+                            break;
+                        case "clean":
+                            resultDiv.classList.add('result-success');
+                            resultMessageSim = "<b>[Simulation] Statut FMI : Désactivé (Propre)</b><br>L'appareil n'est pas associé à un compte Apple ID. L'activation FMI est inactive.";
+                            break;
+                        case "unknown":
+                            resultDiv.classList.add('result-info');
+                            resultMessageSim = "<b>[Simulation] Statut FMI : Inconnu</b><br>Impossible de déterminer le statut d'activation FMI pour le moment. Veuillez réessayer.";
+                            break;
+                        case "invalid":
+                        default:
+                            resultDiv.classList.add('result-info');
+                            resultMessageSim = "<b>[Simulation] Erreur :</b> IMEI/Numéro de Série invalide ou non trouvé. Veuillez vérifier et réessayer.";
+                            break;
+                    }
+                    resultDiv.innerHTML = `<p>${resultMessageSim}</p>`;
+                }, 2000); // Simule un délai de 2 secondes pour la vérification
+                */
+                // ------------------------------------------------------------------------------------------------
+            }
         });
     </script>
 </body>
